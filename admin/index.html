@@ -78,6 +78,8 @@
   .hist .h .grow { flex: 1; min-width: 0; }
   textarea.json { min-height: 420px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
   .hidden { display: none !important; }
+  a { color: var(--accent); }
+  .pack.draft strong::after { content: ' · draft'; color: var(--amber); font-weight: 600; font-size: 12px; }
   .empty { padding: 40px; text-align: center; color: var(--muted); }
 </style>
 </head>
@@ -118,10 +120,17 @@
         <button id="newpack" class="primary">+ Aircraft</button>
       </div>
       <div id="packs" class="packs"></div>
+      <div class="row" style="margin:18px 0 10px"><h2 style="flex:1">Drafts</h2><span class="faint" style="font-size:12px">not visible to pilots</span></div>
+      <div id="drafts" class="packs"></div>
     </aside>
 
     <div>
       <div id="editor" class="hidden">
+        <div id="draftinfo" class="card hidden" style="margin-bottom:14px;border-color:#5a4a1a">
+          <div class="row" style="margin-bottom:6px"><span class="pill" style="color:var(--amber);border-color:#5a4a1a">DRAFT</span><strong style="flex:1">Review against the POH/AFM before publishing</strong></div>
+          <div id="draftnotes" class="muted"></div>
+          <div id="draftsources" style="margin-top:8px;font-size:12px"></div>
+        </div>
         <div class="card">
           <div class="row" style="margin-bottom:12px">
             <h2 id="edtitle" style="flex:1"></h2>
@@ -161,9 +170,11 @@
           <label class="f">What changed (shown to pilots with the update)<input id="changelog" placeholder="e.g. Corrected magneto drop limits in Before Takeoff" /></label>
           <div class="row">
             <button id="publish" class="green">Publish new version</button>
+            <button id="savedraft" class="hidden">Save draft</button>
             <button id="revert">Discard changes</button>
             <div style="flex:1"></div>
             <button id="unpublish" class="danger">Remove from library</button>
+            <button id="deletedraft" class="danger hidden">Delete draft</button>
           </div>
           <div id="msg"></div>
         </div>
@@ -187,6 +198,7 @@ const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$
 const say = (el, text, ok = true) => { $(el).innerHTML = text ? `<div class="toast ${ok ? 'ok' : 'err'}">${esc(text)}</div>` : ''; };
 
 let packs = [];          // library listing
+let drafts = [];         // drafts awaiting review
 let current = null;      // { isNew, original, pack }
 let jsonMode = false;
 
@@ -229,16 +241,40 @@ async function loadPacks(selectId) {
   const { data, error } = await sb.from('checklist_packs').select('id, manufacturer, model, category, version, updated_at').order('manufacturer').order('model');
   if (error) return say('msg', error.message, false);
   packs = data;
+  const d = await sb.from('checklist_pack_drafts').select('pack_id, pack, notes, sources, updated_at').order('pack_id');
+  drafts = d.data ?? [];
   renderPacks();
   if (selectId) openPack(selectId);
 }
 function renderPacks() {
   $('packs').innerHTML = packs.map((p) => `
-    <button class="pack ${current && !current.isNew && current.original.aircraft.id === p.id ? 'on' : ''}" data-id="${esc(p.id)}">
+    <button class="pack ${current && !current.isNew && !current.draftId && current.original.aircraft.id === p.id ? 'on' : ''}" data-id="${esc(p.id)}">
       <strong>${esc(p.manufacturer)} ${esc(p.model)}</strong>
       <span class="muted mono" style="font-size:12px">${esc(p.id)} · v${p.version} · ${esc(p.category)}</span>
     </button>`).join('') || '<div class="muted">No aircraft yet.</div>';
   $('packs').querySelectorAll('.pack').forEach((b) => (b.onclick = () => confirmLeave() && openPack(b.dataset.id)));
+  $('drafts').innerHTML = drafts.map((d) => {
+    const a = d.pack.aircraft ?? {};
+    const pub = packs.find((p) => p.id === d.pack_id);
+    const n = (d.pack.normal?.length ?? 0) + (d.pack.emergency?.length ?? 0);
+    return `<button class="pack draft ${current?.draftId === d.pack_id ? 'on' : ''}" data-draft="${esc(d.pack_id)}">
+      <strong>${esc(a.manufacturer)} ${esc(a.model)}</strong>
+      <span class="muted mono" style="font-size:12px">${esc(d.pack_id)} · ${n} lists · ${pub ? `updates v${pub.version}` : 'new'}</span>
+    </button>`;
+  }).join('') || '<div class="faint">No drafts.</div>';
+  $('drafts').querySelectorAll('.pack').forEach((b) => (b.onclick = () => confirmLeave() && openDraft(b.dataset.draft)));
+}
+
+function openDraft(id) {
+  const d = drafts.find((x) => x.pack_id === id);
+  if (!d) return;
+  const pub = packs.find((p) => p.id === id);
+  const pack = { ...structuredClone(d.pack), version: pub?.version ?? 0 };
+  current = { isNew: !pub, original: structuredClone(pack), pack, draftId: id, notes: d.notes, sources: d.sources ?? [] };
+  jsonMode = false;
+  render();
+  if (pub) loadHistory(id); else $('history').innerHTML = '<div class="faint">New aircraft — no versions yet.</div>';
+  $('changelog').value = pub ? '' : 'First release';
 }
 $('refresh').onclick = () => loadPacks();
 
@@ -272,11 +308,22 @@ function render() {
   $('edtitle').textContent = isNew ? 'New aircraft' : `${pack.aircraft.manufacturer} ${pack.aircraft.model}`;
   $('edver').textContent = isNew ? 'not published' : `published v${pack.version}`;
   $('f-id').value = pack.aircraft.id;
-  $('f-id').disabled = !isNew;
+  $('f-id').disabled = !isNew || !!current.draftId;
   $('f-maker').value = pack.aircraft.manufacturer;
   $('f-model').value = pack.aircraft.model;
   $('f-cat').value = pack.aircraft.category || 'GA';
-  $('unpublish').classList.toggle('hidden', isNew);
+  const isDraft = !!current.draftId;
+  $('unpublish').classList.toggle('hidden', isNew || isDraft);
+  show('draftinfo', isDraft);
+  show('savedraft', isDraft);
+  show('deletedraft', isDraft);
+  if (isDraft) {
+    $('edver').textContent = isNew ? 'draft · new aircraft' : `draft · updates v${pack.version}`;
+    $('draftnotes').textContent = current.notes || '';
+    $('draftsources').innerHTML = (current.sources || []).length
+      ? 'Sources: ' + current.sources.map((u, i) => `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${i + 1}</a>`).join(' · ')
+      : '';
+  }
   $('jsonmode').textContent = jsonMode ? 'Visual editor' : 'Edit as JSON';
   show('visual', !jsonMode);
   show('jsonview', jsonMode);
@@ -403,7 +450,7 @@ $('publish').onclick = async () => {
   const pack = cleaned(current.pack);
   if (!pack.aircraft.manufacturer || !pack.aircraft.model) return say('msg', 'Manufacturer and model are required.', false);
   if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(pack.aircraft.id)) return say('msg', 'Aircraft id: 2–41 lower-case letters, digits or dashes.', false);
-  if (current.isNew && packs.some((p) => p.id === pack.aircraft.id)) return say('msg', `“${pack.aircraft.id}” already exists — open it from the list to publish a new version.`, false);
+  if (current.isNew && !current.draftId && packs.some((p) => p.id === pack.aircraft.id)) return say('msg', `“${pack.aircraft.id}” already exists — open it from the list to publish a new version.`, false);
   if (!pack.normal.length && !pack.emergency.length) return say('msg', 'Add at least one checklist with items.', false);
   const changelog = $('changelog').value.trim();
   const items = [...pack.normal, ...pack.emergency].reduce((n, c) => n + c.items.length, 0);
@@ -412,6 +459,7 @@ $('publish').onclick = async () => {
   const { data, error } = await sb.rpc('publish_pack', { p_pack: pack, p_changelog: changelog || null });
   $('publish').disabled = false;
   if (error) return say('msg', error.message, false);
+  if (current.draftId) await sb.from('checklist_pack_drafts').delete().eq('pack_id', current.draftId);
   $('changelog').value = '';
   current = null;
   await loadPacks(pack.aircraft.id);
@@ -426,6 +474,26 @@ $('unpublish').onclick = async () => {
   current = null;
   render();
   loadPacks();
+};
+
+$('savedraft').onclick = async () => {
+  if (jsonMode && !readJson()) return;
+  const pack = cleaned(current.pack);
+  const { error } = await sb.from('checklist_pack_drafts')
+    .update({ pack: { ...pack, version: 1 }, updated_at: new Date().toISOString() })
+    .eq('pack_id', current.draftId);
+  if (error) return say('msg', error.message, false);
+  current.original = structuredClone(current.pack);
+  await loadPacks();
+  say('msg', 'Draft saved.');
+};
+$('deletedraft').onclick = async () => {
+  if (!confirm(`Delete the draft for ${current.draftId}? This can't be undone.`)) return;
+  const { error } = await sb.from('checklist_pack_drafts').delete().eq('pack_id', current.draftId);
+  if (error) return say('msg', error.message, false);
+  current = null;
+  render();
+  await loadPacks();
 };
 
 // ── History ───────────────────────────────────────────────────────────
