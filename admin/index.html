@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Library Admin · Aircraft Checklist</title>
+<style>
+  :root {
+    --bg: #0a0e14; --surface: #111720; --surface2: #161e2a; --border: #232d3a; --border2: #33404f;
+    --ink: #e7edf5; --muted: #8d9aab; --faint: #5c6878;
+    --accent: #4fd1e8; --green: #3ddc97; --amber: #f2b33d; --red: #ef5b5b;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  input, select, textarea {
+    background: var(--bg); border: 1px solid var(--border2); border-radius: 8px; padding: 8px 10px; width: 100%;
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    cursor: pointer; border: 1px solid var(--border2); background: var(--surface2); border-radius: 8px;
+    padding: 8px 12px; white-space: nowrap;
+  }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); color: #062029; border-color: var(--accent); font-weight: 700; }
+  button.green { background: var(--green); color: #052016; border-color: var(--green); font-weight: 700; }
+  button.danger { color: var(--red); }
+  button.icon { padding: 6px 9px; }
+  label.f { display: grid; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
+  h1 { font-size: 18px; margin: 0; }
+  h2 { font-size: 15px; margin: 0; }
+  .muted { color: var(--muted); }
+  .faint { color: var(--faint); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--border);
+    background: var(--surface); position: sticky; top: 0; z-index: 5;
+  }
+  header .grow { flex: 1; }
+  main { max-width: 1240px; margin: 0 auto; padding: 20px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .center { max-width: 380px; margin: 60px auto; display: grid; gap: 12px; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+  .packs { display: grid; gap: 6px; }
+  .pack {
+    text-align: left; width: 100%; display: grid; gap: 2px; padding: 10px 12px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 10px;
+  }
+  .pack.on { border-color: var(--accent); background: var(--surface2); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .grid4 { display: grid; grid-template-columns: 1.1fr 1.4fr 1.4fr .8fr; gap: 10px; }
+  @media (max-width: 640px) { .grid4 { grid-template-columns: 1fr 1fr; } }
+  .section { margin-top: 18px; display: grid; gap: 10px; }
+  .sectionhead { display: flex; align-items: center; gap: 8px; }
+  .sectionhead h2 { flex: 1; }
+  .cl { border: 1px solid var(--border); border-radius: 10px; background: var(--surface2); }
+  .cl > .head { display: flex; gap: 8px; align-items: center; padding: 10px; }
+  .cl > .head input.title { font-weight: 700; }
+  .cl > .body { padding: 0 10px 10px; display: grid; gap: 6px; }
+  .item { display: grid; grid-template-columns: 26px 1fr 1fr auto; gap: 6px; align-items: center; }
+  .item .n { color: var(--faint); font-size: 12px; text-align: right; }
+  .pill { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 99px; border: 1px solid var(--border2); color: var(--muted); }
+  .pill.mem { color: var(--red); border-color: #5a2a2a; }
+  .bar {
+    position: sticky; bottom: 0; margin-top: 20px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px; display: grid; gap: 8px;
+  }
+  .toast { padding: 10px 12px; border-radius: 8px; font-weight: 600; }
+  .toast.ok { background: #0f2a20; color: var(--green); }
+  .toast.err { background: #2a1214; color: var(--red); }
+  .hist { display: grid; gap: 6px; margin-top: 8px; }
+  .hist .h { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+  .hist .h .grow { flex: 1; min-width: 0; }
+  textarea.json { min-height: 420px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+  .hidden { display: none !important; }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4fd1e8" stroke-width="2"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
+  <h1>Library Admin <span class="faint" style="font-weight:400">· Aircraft Checklist: Voice</span></h1>
+  <div class="grow"></div>
+  <span id="who" class="muted"></span>
+  <button id="signout" class="hidden">Sign out</button>
+</header>
+
+<main>
+  <!-- Sign in -->
+  <section id="signin" class="center card hidden">
+    <h2>Sign in</h2>
+    <p class="muted" style="margin:0">Use your admin account. We'll email you a 6-digit code.</p>
+    <label class="f">Email<input id="email" type="email" autocomplete="email" placeholder="you@example.com" /></label>
+    <button id="sendcode" class="primary">Email me a code</button>
+    <div id="codebox" class="hidden" style="display:grid;gap:10px">
+      <label class="f">Code from the email<input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" /></label>
+      <button id="verify" class="primary">Sign in</button>
+    </div>
+    <div id="signinmsg"></div>
+  </section>
+
+  <section id="notadmin" class="center card hidden">
+    <h2>Not an admin</h2>
+    <p class="muted" style="margin:0">This account can't edit the library. Ask an existing admin to set <span class="mono">is_admin</span> on your profile in Supabase.</p>
+  </section>
+
+  <!-- Editor -->
+  <section id="app" class="layout hidden">
+    <aside>
+      <div class="row" style="margin-bottom:10px">
+        <h2 style="flex:1">Library</h2>
+        <button id="refresh" class="icon" title="Refresh">↻</button>
+        <button id="newpack" class="primary">+ Aircraft</button>
+      </div>
+      <div id="packs" class="packs"></div>
+    </aside>
+
+    <div>
+      <div id="editor" class="hidden">
+        <div class="card">
+          <div class="row" style="margin-bottom:12px">
+            <h2 id="edtitle" style="flex:1"></h2>
+            <span id="edver" class="pill"></span>
+            <button id="jsonmode">Edit as JSON</button>
+          </div>
+          <div class="grid4">
+            <label class="f">Aircraft id<input id="f-id" class="mono" placeholder="e.g. pa28-181" /></label>
+            <label class="f">Manufacturer<input id="f-maker" placeholder="e.g. Piper" /></label>
+            <label class="f">Model<input id="f-model" placeholder="e.g. PA-28-181 Archer" /></label>
+            <label class="f">Category<select id="f-cat"><option>GA</option><option>LSA</option></select></label>
+          </div>
+        </div>
+
+        <div id="visual">
+          <div class="section">
+            <div class="sectionhead"><h2>Normal procedures</h2><button data-add="normal">+ Checklist</button></div>
+            <div id="normal" style="display:grid;gap:10px"></div>
+          </div>
+          <div class="section">
+            <div class="sectionhead"><h2>Emergency procedures</h2><button data-add="emergency">+ Checklist</button></div>
+            <div id="emergency" style="display:grid;gap:10px"></div>
+          </div>
+        </div>
+
+        <div id="jsonview" class="section hidden">
+          <p class="muted" style="margin:0">The pack as JSON — <span class="mono">normal</span> / <span class="mono">emergency</span> lists of <span class="mono">{ title, memory?, items: [[challenge, response], …] }</span>.</p>
+          <textarea id="json" class="json" spellcheck="false"></textarea>
+        </div>
+
+        <div class="card section">
+          <div class="row"><h2 style="flex:1">Version history</h2><span class="faint">Load an older version to restore it — publishing it creates a new version.</span></div>
+          <div id="history" class="hist"></div>
+        </div>
+
+        <div class="bar">
+          <label class="f">What changed (shown to pilots with the update)<input id="changelog" placeholder="e.g. Corrected magneto drop limits in Before Takeoff" /></label>
+          <div class="row">
+            <button id="publish" class="green">Publish new version</button>
+            <button id="revert">Discard changes</button>
+            <div style="flex:1"></div>
+            <button id="unpublish" class="danger">Remove from library</button>
+          </div>
+          <div id="msg"></div>
+        </div>
+      </div>
+      <div id="noselection" class="card empty">Select an aircraft, or add a new one.</div>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/+esm';
+
+const SUPABASE_URL = 'https://nspiwfxcknbbnybrzkdn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_fnG5V5ko8IOVTpTn5bPWGA_JB74lV6w'; // publishable — row-level security does the guarding
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const $ = (id) => document.getElementById(id);
+const show = (id, on = true) => $(id).classList.toggle('hidden', !on);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+const say = (el, text, ok = true) => { $(el).innerHTML = text ? `<div class="toast ${ok ? 'ok' : 'err'}">${esc(text)}</div>` : ''; };
+
+let packs = [];          // library listing
+let current = null;      // { isNew, original, pack }
+let jsonMode = false;
+
+// ── Auth ──────────────────────────────────────────────────────────────
+async function boot() {
+  const { data } = await sb.auth.getSession();
+  if (!data.session) return showSignIn();
+  $('who').textContent = data.session.user.email;
+  show('signout');
+  const { data: prof } = await sb.from('profiles').select('is_admin').maybeSingle();
+  show('signin', false);
+  if (!prof?.is_admin) return show('notadmin');
+  show('notadmin', false);
+  show('app');
+  await loadPacks();
+}
+function showSignIn() { show('signin'); show('app', false); show('signout', false); $('who').textContent = ''; }
+
+$('sendcode').onclick = async () => {
+  const email = $('email').value.trim();
+  if (!email.includes('@')) return say('signinmsg', 'Enter your email.', false);
+  $('sendcode').disabled = true;
+  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+  $('sendcode').disabled = false;
+  if (error) return say('signinmsg', error.message, false);
+  show('codebox'); $('code').focus();
+  say('signinmsg', 'Code sent — check your inbox.');
+};
+$('verify').onclick = async () => {
+  const { error } = await sb.auth.verifyOtp({ email: $('email').value.trim(), token: $('code').value.trim(), type: 'email' });
+  if (error) return say('signinmsg', error.message, false);
+  say('signinmsg', '');
+  boot();
+};
+$('code').addEventListener('keydown', (e) => e.key === 'Enter' && $('verify').click());
+$('signout').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+
+// ── Library list ──────────────────────────────────────────────────────
+async function loadPacks(selectId) {
+  const { data, error } = await sb.from('checklist_packs').select('id, manufacturer, model, category, version, updated_at').order('manufacturer').order('model');
+  if (error) return say('msg', error.message, false);
+  packs = data;
+  renderPacks();
+  if (selectId) openPack(selectId);
+}
+function renderPacks() {
+  $('packs').innerHTML = packs.map((p) => `
+    <button class="pack ${current && !current.isNew && current.original.aircraft.id === p.id ? 'on' : ''}" data-id="${esc(p.id)}">
+      <strong>${esc(p.manufacturer)} ${esc(p.model)}</strong>
+      <span class="muted mono" style="font-size:12px">${esc(p.id)} · v${p.version} · ${esc(p.category)}</span>
+    </button>`).join('') || '<div class="muted">No aircraft yet.</div>';
+  $('packs').querySelectorAll('.pack').forEach((b) => (b.onclick = () => confirmLeave() && openPack(b.dataset.id)));
+}
+$('refresh').onclick = () => loadPacks();
+
+async function openPack(id) {
+  const { data, error } = await sb.from('checklist_packs').select('pack, version').eq('id', id).single();
+  if (error) return say('msg', error.message, false);
+  const pack = structuredClone(data.pack);
+  pack.version = data.version;
+  current = { isNew: false, original: structuredClone(pack), pack };
+  jsonMode = false;
+  render();
+  loadHistory(id);
+}
+$('newpack').onclick = () => {
+  if (!confirmLeave()) return;
+  const pack = { aircraft: { id: '', manufacturer: '', model: '', category: 'GA' }, version: 0, normal: [{ title: 'Preflight Inspection', items: [['', '']] }], emergency: [] };
+  current = { isNew: true, original: structuredClone(pack), pack };
+  jsonMode = false;
+  render();
+  $('history').innerHTML = '<div class="faint">New aircraft — no versions yet.</div>';
+  $('f-maker').focus();
+};
+
+// ── Editor ────────────────────────────────────────────────────────────
+function render() {
+  show('noselection', !current);
+  show('editor', !!current);
+  renderPacks();
+  if (!current) return;
+  const { pack, isNew } = current;
+  $('edtitle').textContent = isNew ? 'New aircraft' : `${pack.aircraft.manufacturer} ${pack.aircraft.model}`;
+  $('edver').textContent = isNew ? 'not published' : `published v${pack.version}`;
+  $('f-id').value = pack.aircraft.id;
+  $('f-id').disabled = !isNew;
+  $('f-maker').value = pack.aircraft.manufacturer;
+  $('f-model').value = pack.aircraft.model;
+  $('f-cat').value = pack.aircraft.category || 'GA';
+  $('unpublish').classList.toggle('hidden', isNew);
+  $('jsonmode').textContent = jsonMode ? 'Visual editor' : 'Edit as JSON';
+  show('visual', !jsonMode);
+  show('jsonview', jsonMode);
+  if (jsonMode) $('json').value = JSON.stringify(stripMeta(pack), null, 2);
+  else { renderLists('normal'); renderLists('emergency'); }
+}
+
+function renderLists(kind) {
+  const lists = current.pack[kind] ?? (current.pack[kind] = []);
+  $(kind).innerHTML = lists.map((cl, ci) => `
+    <div class="cl" data-kind="${kind}" data-ci="${ci}">
+      <div class="head">
+        <input class="title" data-f="title" value="${esc(cl.title)}" placeholder="Checklist title" />
+        ${kind === 'emergency' ? `<label class="row muted" style="gap:6px;white-space:nowrap"><input type="checkbox" data-f="memory" ${cl.memory ? 'checked' : ''} style="width:auto"/> Memory items</label>` : ''}
+        <span class="pill">${cl.items.length} items</span>
+        <button class="icon" data-act="clup" title="Move up">↑</button>
+        <button class="icon" data-act="cldown" title="Move down">↓</button>
+        <button class="icon danger" data-act="cldel" title="Delete checklist">✕</button>
+      </div>
+      <div class="body">
+        ${cl.items.map(([c, r], ii) => `
+          <div class="item" data-ii="${ii}">
+            <span class="n">${ii + 1}</span>
+            <input data-f="c" value="${esc(c)}" placeholder="Challenge (e.g. Fuel Selector)" />
+            <input data-f="r" value="${esc(r)}" placeholder="Response (e.g. BOTH)" class="mono" />
+            <span class="row" style="gap:4px;flex-wrap:nowrap">
+              <button class="icon" data-act="up" title="Move up">↑</button>
+              <button class="icon" data-act="down" title="Move down">↓</button>
+              <button class="icon danger" data-act="del" title="Delete item">✕</button>
+            </span>
+          </div>`).join('')}
+        <div><button data-act="additem">+ Item</button></div>
+      </div>
+    </div>`).join('') || '<div class="faint">None.</div>';
+}
+
+// Field edits (no re-render, so focus is kept).
+for (const kind of ['normal', 'emergency']) {
+  $(kind).addEventListener('input', (e) => {
+    const box = e.target.closest('.cl'); if (!box) return;
+    const cl = current.pack[kind][+box.dataset.ci];
+    const f = e.target.dataset.f;
+    if (f === 'title') cl.title = e.target.value;
+    else if (f === 'memory') cl.memory = e.target.checked;
+    else if (f === 'c' || f === 'r') cl.items[+e.target.closest('.item').dataset.ii][f === 'c' ? 0 : 1] = e.target.value;
+  });
+  $(kind).addEventListener('change', (e) => { if (e.target.dataset.f === 'memory') current.pack[kind][+e.target.closest('.cl').dataset.ci].memory = e.target.checked; });
+  $(kind).addEventListener('click', (e) => {
+    const act = e.target.dataset.act; if (!act) return;
+    const lists = current.pack[kind];
+    const ci = +e.target.closest('.cl').dataset.ci;
+    const cl = lists[ci];
+    const ii = e.target.closest('.item') ? +e.target.closest('.item').dataset.ii : -1;
+    const swap = (arr, i, j) => { if (j < 0 || j >= arr.length) return; [arr[i], arr[j]] = [arr[j], arr[i]]; };
+    if (act === 'additem') cl.items.push(['', '']);
+    if (act === 'del') cl.items.splice(ii, 1);
+    if (act === 'up') swap(cl.items, ii, ii - 1);
+    if (act === 'down') swap(cl.items, ii, ii + 1);
+    if (act === 'clup') swap(lists, ci, ci - 1);
+    if (act === 'cldown') swap(lists, ci, ci + 1);
+    if (act === 'cldel' && confirm(`Delete the checklist “${cl.title || 'untitled'}”?`)) lists.splice(ci, 1);
+    renderLists(kind);
+    if (act === 'additem') { const items = $(kind).querySelectorAll(`.cl[data-ci="${ci}"] .item input[data-f="c"]`); items[items.length - 1]?.focus(); }
+  });
+}
+document.querySelectorAll('[data-add]').forEach((b) => (b.onclick = () => {
+  const kind = b.dataset.add;
+  current.pack[kind].push(kind === 'emergency' ? { title: '', memory: false, items: [['', '']] } : { title: '', items: [['', '']] });
+  renderLists(kind);
+  $(kind).querySelector('.cl:last-child input.title')?.focus();
+}));
+
+$('f-maker').oninput = $('f-model').oninput = () => {
+  current.pack.aircraft.manufacturer = $('f-maker').value;
+  current.pack.aircraft.model = $('f-model').value;
+  if (current.isNew && !current.idTouched) { current.pack.aircraft.id = slug(`${$('f-maker').value} ${$('f-model').value}`).slice(0, 41); $('f-id').value = current.pack.aircraft.id; }
+};
+$('f-id').oninput = () => { current.idTouched = true; current.pack.aircraft.id = $('f-id').value.trim().toLowerCase(); };
+$('f-cat').onchange = () => (current.pack.aircraft.category = $('f-cat').value);
+
+$('jsonmode').onclick = () => {
+  if (jsonMode) { if (!readJson()) return; }
+  jsonMode = !jsonMode;
+  render();
+};
+function readJson() {
+  try {
+    const p = JSON.parse($('json').value);
+    if (!p || typeof p !== 'object') throw new Error('Not an object');
+    current.pack = { ...p, aircraft: { ...current.pack.aircraft, ...(current.isNew ? p.aircraft : {}) }, version: current.pack.version };
+    return true;
+  } catch (e) { say('msg', `JSON error: ${e.message}`, false); return false; }
+}
+const stripMeta = (p) => ({ aircraft: p.aircraft, normal: p.normal ?? [], emergency: p.emergency ?? [] });
+
+// Clean a pack for publishing: trim, drop empty items and untitled lists.
+function cleaned(pack) {
+  const fix = (lists, emergency) => (lists ?? [])
+    .map((cl) => ({
+      title: (cl.title ?? '').trim(),
+      ...(emergency ? { memory: !!cl.memory } : {}),
+      items: (cl.items ?? []).map(([c, r]) => [String(c ?? '').trim(), String(r ?? '').trim()]).filter(([c]) => c),
+    }))
+    .filter((cl) => cl.title && cl.items.length);
+  return {
+    aircraft: {
+      id: pack.aircraft.id.trim().toLowerCase(),
+      manufacturer: pack.aircraft.manufacturer.trim(),
+      model: pack.aircraft.model.trim(),
+      category: pack.aircraft.category || 'GA',
+    },
+    normal: fix(pack.normal, false),
+    emergency: fix(pack.emergency, true),
+  };
+}
+const dirty = () => current && JSON.stringify(cleaned(current.pack)) !== JSON.stringify(cleaned(current.original));
+const confirmLeave = () => !dirty() || confirm('Discard your unpublished changes?');
+window.addEventListener('beforeunload', (e) => { if (dirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+$('revert').onclick = () => { if (!current || !confirmLeave()) return; current.pack = structuredClone(current.original); render(); say('msg', ''); };
+
+$('publish').onclick = async () => {
+  if (jsonMode && !readJson()) return;
+  const pack = cleaned(current.pack);
+  if (!pack.aircraft.manufacturer || !pack.aircraft.model) return say('msg', 'Manufacturer and model are required.', false);
+  if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(pack.aircraft.id)) return say('msg', 'Aircraft id: 2–41 lower-case letters, digits or dashes.', false);
+  if (current.isNew && packs.some((p) => p.id === pack.aircraft.id)) return say('msg', `“${pack.aircraft.id}” already exists — open it from the list to publish a new version.`, false);
+  if (!pack.normal.length && !pack.emergency.length) return say('msg', 'Add at least one checklist with items.', false);
+  const changelog = $('changelog').value.trim();
+  const items = [...pack.normal, ...pack.emergency].reduce((n, c) => n + c.items.length, 0);
+  if (!confirm(`Publish ${pack.aircraft.manufacturer} ${pack.aircraft.model} (${pack.normal.length + pack.emergency.length} checklists, ${items} items)?\n\nPilots who have this aircraft will see “Update available”.`)) return;
+  $('publish').disabled = true;
+  const { data, error } = await sb.rpc('publish_pack', { p_pack: pack, p_changelog: changelog || null });
+  $('publish').disabled = false;
+  if (error) return say('msg', error.message, false);
+  $('changelog').value = '';
+  current = null;
+  await loadPacks(pack.aircraft.id);
+  say('msg', `Published v${data}.`);
+};
+
+$('unpublish').onclick = async () => {
+  const id = current.pack.aircraft.id;
+  if (!confirm(`Remove ${id} from the library?\n\nPilots who already downloaded it keep it; new pilots won't see it. Version history is kept.`)) return;
+  const { error } = await sb.rpc('unpublish_pack', { p_id: id });
+  if (error) return say('msg', error.message, false);
+  current = null;
+  render();
+  loadPacks();
+};
+
+// ── History ───────────────────────────────────────────────────────────
+async function loadHistory(id) {
+  const { data, error } = await sb.from('checklist_pack_versions').select('version, changelog, published_at, pack').eq('pack_id', id).order('version', { ascending: false });
+  if (error) return ($('history').innerHTML = `<div class="faint">${esc(error.message)}</div>`);
+  $('history').innerHTML = data.map((v) => `
+    <div class="h">
+      <span class="pill">v${v.version}</span>
+      <div class="grow">
+        <div>${esc(v.changelog || '—')}</div>
+        <div class="faint" style="font-size:12px">${new Date(v.published_at).toLocaleString()}</div>
+      </div>
+      ${v.version === current.original.version ? '<span class="faint">current</span>' : `<button data-v="${v.version}">Load</button>`}
+    </div>`).join('') || '<div class="faint">No history.</div>';
+  $('history').querySelectorAll('button[data-v]').forEach((b) => (b.onclick = () => {
+    if (!confirmLeave()) return;
+    const v = data.find((x) => x.version === +b.dataset.v);
+    current.pack = { ...structuredClone(v.pack), version: current.original.version };
+    render();
+    $('changelog').value = `Restored v${v.version}`;
+    say('msg', `Loaded v${v.version}. Publish to make it the current version.`);
+  }));
+}
+
+sb.auth.onAuthStateChange((evt) => { if (evt === 'SIGNED_OUT') showSignIn(); });
+boot();
+</script>
+</body>
+</html>
